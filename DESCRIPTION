@@ -1,0 +1,16 @@
+Package: Matrix.utils
+Title: Tools for parsing and manipulating rpart objects, including generating
+    machine readable rules.
+Version: 0.9
+Author: Craig Varrichio <canthony427@gmail.com>
+Maintainer: Craig Varrichio <canthony427@gmail.com>
+Description: This package contains additional tools for working with rpart
+    objects.  Most importantly, it includes methods for converting rpart rules
+    into a series of structured tables sufficient for executing the decision
+    tree completely in SQL.
+Depends:
+    R (>= 3.0.0),
+    Matrix
+License: GPL-3
+LazyData: true
+RoxygenNote: 5.0.1
