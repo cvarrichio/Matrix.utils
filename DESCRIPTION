@@ -11,6 +11,10 @@ Description: This package contains additional tools for working with rpart
 Depends:
     R (>= 3.0.0),
     Matrix
+Suggests:
+	reshape2,
+	data.table,
+	dplyr
 License: GPL-3
 LazyData: true
 RoxygenNote: 5.0.1
