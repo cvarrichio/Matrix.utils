@@ -2,11 +2,49 @@
 % Please edit documentation in R/Matrix.utils.R
 \name{aggregate.Matrix}
 \alias{aggregate.Matrix}
+\title{Compute summary statistics of a Matrix.}
 \usage{
-\method{aggregate}{Matrix}(data, groupings, fun = colSums)
+\method{aggregate}{Matrix}(x, groupings = NULL, form = NULL, fun = "sum")
+}
+\arguments{
+\item{x}{a \code{\link{Matrix}} or matrix-like object}
+
+\item{groupings}{an object coercible to a group of factors defining the groups}
+
+\item{form}{\code{\link[stats]{formula}}}
+
+\item{fun}{name of aggregation function to be applied to all columns in data}
+}
+\description{
+Similar to \code{\link[stats]{aggregate}}.  Splits the matrix into groups as
+specified by groupings, which can be one or more variables. Aggregation
+function will be applied to all columns in data, or as specified in formula. 
+Warning: groupings will be made dense if it is sparse, though data will not.
 }
 \examples{
-## Not run:
-system.time(d<-aggregate.Matrix(test[,'amount',drop=FALSE],test$orderNum))
+skus<-Matrix(as.matrix(data.frame(
+   orderNum=sample(1000,10000,TRUE),
+   sku=sample(1000,10000,TRUE),
+   amount=runif(10000))),sparse=TRUE)
+a<-aggregate.Matrix(skus[,'amount'],skus[,'sku',drop=FALSE])
+
+m<-rsparsematrix(1000000,100,.001)
+labels<-as.factor(sample(1e4,1e6,TRUE))
+b<-aggregate.Matrix(m,labels)
+
+\dontrun{
+orders<-data.frame(orderNum=as.factor(sample(1e6, 1e7, TRUE)),
+   sku=as.factor(sample(1e3, 1e7, TRUE)),
+   customer=as.factor(sample(1e4,1e7,TRUE)),
+   state = sample(letters, 1e7, TRUE), amount=runif(1e7))
+system.time(d<-aggregate.Matrix(orders[,'amount',drop=FALSE],orders$orderNum))
+}
+}
+\seealso{
+\code{\link[dplyr]{summarise}}
+
+\code{\link[plyr]{summarise}}
+
+\code{\link[stats]{aggregate}}
 }
 

@@ -1,16 +1,13 @@
 Package: Matrix.utils
-Title: Tools for parsing and manipulating rpart objects, including generating
-    machine readable rules.
-Version: 0.9
+Title: Data.frame-like operations on sparse and dense Matrix objects.
+Version: 0.5
 Author: Craig Varrichio <canthony427@gmail.com>
 Maintainer: Craig Varrichio <canthony427@gmail.com>
-Description: This package contains additional tools for working with rpart
-    objects.  Most importantly, it includes methods for converting rpart rules
-    into a series of structured tables sufficient for executing the decision
-    tree completely in SQL.
+Description: Implements cast, aggregate, and join for \code{\link{Matrix}} and matrix-like objects.
 Depends:
     R (>= 3.0.0),
-    Matrix
+    Matrix,
+    stats
 Suggests:
 	reshape2,
 	data.table,
@@ -18,3 +15,4 @@ Suggests:
 License: GPL-3
 LazyData: true
 RoxygenNote: 5.0.1
+

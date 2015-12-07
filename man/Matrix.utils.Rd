@@ -4,11 +4,9 @@
 \name{Matrix.utils}
 \alias{Matrix.utils}
 \alias{Matrix.utils-package}
-\title{Row-based functions for R objects}
+\title{Data.frame-like operations on sparse and dense \code{Matrix} objects,}
 \description{
-Rowr allows the manipulation of R objects as if they were organized rows in a
-way that is familiar to people used to working with databases.  It allows
-more consistent and predictable output to common functions, and generalizes a
-number of utility functions to to be failsafe with any number of objects.
+Implements cast, aggregate, and join for \code{\link{Matrix}} and matrix-like
+objects.
 }
 
