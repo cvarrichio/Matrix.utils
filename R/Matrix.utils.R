@@ -37,6 +37,23 @@ NULL
 #' @export
 #' @examples
 #' 
+#' #Classic air quality example
+#' melt<-function(data,idColumns)
+#' {
+#'   cols<-setdiff(colnames(data),idColumns)
+#'   results<-lapply(cols,function (x) cbind(data[,idColumns],variable=x,value=as.numeric(data[,x])))
+#'   results<-Reduce(rbind,results)
+#' }
+#' names(airquality) <- tolower(names(airquality))
+#' aqm <- melt(airquality, idColumns=c("month", "day"))
+#' dMcast(aqm, day:month ~variable,fun.aggregate = 'mean',value.var='value')
+#' dMcast(aqm, month ~ variable, fun.aggregate = 'mean',value.var='value') 
+#' 
+#' #One hot encoding
+#' #Preserving numerics
+#' dMcast(warpbreaks,~.)
+#' #Pivoting numerics as well
+#' 
 #' \dontrun{
 #' orders<-data.frame(orderNum=as.factor(sample(1e6, 1e7, TRUE)), 
 #'    sku=as.factor(cast.Matrsample(1e3, 1e7, TRUE)), 
@@ -49,7 +66,7 @@ NULL
 #'    value.var = 'amount')) # .5 seconds 
 #' system.time(b<-reshape2::dcast(orders,sku~state,sum,
 #'    value.var = 'amount')) # 2.61 seconds 
-#' system.time(c<-cast.Matrix(orders,sku~state,
+#' system.time(c<-dMcast(orders,sku~state,
 #'    value.var = 'amount')) # 28 seconds 
 #'    
 #' # However, this situation changes as the result set becomes larger 
@@ -57,7 +74,7 @@ NULL
 #'    value.var = 'amount')) # 4.4 seconds 
 #' system.time(b<-reshape2::dcast(orders,customer~sku,sum,
 #'    value.var = 'amount')) # 34.7 seconds 
-#'  system.time(c<-cast.Matrix(orders,customer~sku,
+#'  system.time(c<-dMcast(orders,customer~sku,
 #'    value.var = 'amount')) # 27 seconds 
 #'    
 #' # More complicated: 
@@ -65,16 +82,17 @@ NULL
 #'    value.var = 'amount')) # 18.1 seconds, object size = 2084 Mb 
 #' system.time(b<-reshape2::dcast(orders,customer~sku+state,sum,
 #'    value.var = 'amount')) # Does not return 
-#' system.time(c<-cast.Matrix(orders,customer~sku:state,
+#' system.time(c<-dMcast(orders,customer~sku:state,
 #'    value.var = 'amount')) # 30.69 seconds, object size = 115.4 Mb
 #' 
 #' system.time(a<-dcast.data.table(as.data.table(orders),orderNum~sku,sum,
 #'    value.var = 'amount')) # Does not return 
-#' system.time(c<-cast.Matrix(orders,orderNum~sku,
+#' system.time(c<-dMcast(orders,orderNum~sku,
 #'    value.var = 'amount')) # 36.33 seconds, object size = 175Mb
 #' 
-cast.Matrix<-function(data,formula,fun.aggregate='sum',value.var=NULL)
+dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL)
 {
+  browser()
   alltms<-terms(formula,data=data)
   response<-rownames(attr(alltms,'factors'))[attr(alltms,'response')]
   tm<-attr(alltms,"term.labels")
@@ -100,7 +118,7 @@ cast.Matrix<-function(data,formula,fun.aggregate='sum',value.var=NULL)
   if(isTRUE(response>0))
   {
     responses=all.vars(terms(as.formula(paste(response,'~0'))))
-    result<-aggregate.Matrix(result,form=paste('~0 +',response),data[,responses,drop=FALSE],fun=fun)
+    result<-aggregate.Matrix(result,form=paste('~0 +',response),data[,responses,drop=FALSE],fun=fun.aggregate)
   }
   return(result)
 }
@@ -152,16 +170,16 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum')
   if(is.null(form))
     form<-as.formula('~0+.')
   form<-as.formula(form)
-  mapping<-cast.Matrix(groupings,form)
+  mapping<-dMcast(groupings,form)
   result<-t(mapping) %*% x
   if(fun=='mean')
     result@x<-result@x/(aggregate.Matrix(x,groupings,fun='count'))@x
   return(result)
 }
 
-#'Joins two matrices.
+#'Merges two Matrices or matrix-like objects 
 #'
-#'Similar to \code{\link{merge}} or Rudimentary at this point; can do left and 
+#'Similar to \code{\link{merge}} or \code{\link[plyr]{join}. Rudimentary at this point; can do left and 
 #'inner joins that only find the first matching row; equivalent to 
 #'plyr::join(match='first').
 #'
@@ -208,16 +226,6 @@ join.Matrix<-function(x,y,by.x=rownames(x),by.y=rownames(y),type='left')
 melt<-function(data,idColumns)
 {
   cols<-setdiff(colnames(data),idColumns)
-  results<-lapply(cols,function (x) cbind(data[,idColumns],variable=x,value=data[,x]))
+  results<-lapply(cols,function (x) cbind(data[,idColumns],variable=x,value=as.numeric(data[,x])))
   results<-Reduce(rbind,results)
 }
-
-
-#' Synonym for cast.Matrix.
-#' @rdname cast.Matrix
-#' @export
-acast.Matrix<-cast.Matrix
-#' Synonym for cast.Matrix.  
-#' @rdname cast.Matrix
-#' @export
-dcast.Matrix<-cast.Matrix
