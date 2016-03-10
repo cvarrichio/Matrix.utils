@@ -8,6 +8,8 @@ Depends:
     R (>= 3.0.0),
     Matrix,
     stats
+Imports:
+    grr
 Suggests:
 	reshape2,
 	data.table,
