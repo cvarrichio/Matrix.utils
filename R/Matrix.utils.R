@@ -266,8 +266,8 @@ merge.Matrix<-function(x,y,by.x,by.y,all.x=TRUE,all.y=TRUE,...)
   if(is.null(dim(x)))
     return(grr::matches(by.x,by.y,all.x,all.y,indexes=FALSE))
   indices<-grr::matches(by.x,by.y,all.x,all.y,nomatch = NULL)
-  x<-rbind2(x,NA)
-  y<-rbind2(y,NA)
+  x<-rBind(x,NA)
+  y<-rBind(y,NA)
   if(!is.null(colnames(x)) & !is.null(colnames(y)))
     colnames(y)[colnames(y) %in% colnames(x)]<-paste('y',colnames(y)[colnames(y) %in% colnames(x)],sep='.')
   result<-cbind2(grr::extract(x,indices$x),grr::extract(y,indices$y))
@@ -281,38 +281,65 @@ join.Matrix<-merge.Matrix
 #'Combine matrixes by row, fill in missing columns.
 #'
 #'rbinds a list of Matrix or matrix like objects, filling in missing columns.
+#'
+#'Similar to \code{\link{rbind.fill.matrix}}, but works for \code{\link{Matrix}} as
+#'well as all other R objects.  It is completely agnostic to class, and will
+#'produce an object of the class of the first input (or of class \code{matrix}
+#'if the first object is one dimensional).
+#'
+#'@param x,... Objects to combine.  If the first argument is a list and \code{..} is unpopulated, the objects in that list will be combined.
+#'@param fill value with which to fill unmatched columns
+#'@seealso \code{\link{rbind.fill}}
+#'@seealso \code{\link{rbind.fill.matrix}}
 #'@export
 #'@examples
 #'df1 = data.frame(x = c(1,2,3), y = c(4,5,6))
 #'rownames(df1) = c("a", "b", "c")
 #'df2 = data.frame(x = c(7,8), z = c(9,10))
 #'rownames(df2) = c("a", "d")
-#'rbind.fill.Matrix.int(df1,df2,fill=NA)
-
-rbind2.fill<-function(x,...,fill=NA)
+#'rBind.fill(df1,df2,fill=NA)
+#'rBind.fill(as(df1,'Matrix'),df2,fill=0)
+#'rBind.fill(as.matrix(df1),as(df2,'Matrix'),c(1,2),fill=0)
+#'rBind.fill(c(1,2,3),list(4,5,6,7))
+#'rBind.fill(df1,c(1,2,3))
+rBind.fill<-function(x,...,fill=NA)
 {
-  if (is.list(x) && !is.data.frame(x)) {
-    Reduce(function (x,y) rbind2.fill.int(x,y,fill),x)
+  if (is.list(x) && !is.data.frame(x) && missing(...)) {
+    Reduce(function (x,y) rBind.fill.internal(x,y,fill),x)
   }
   else {
-    Reduce(function (x,y) rbind2.fill.int(x,y,fill),list(x,...))
+    Reduce(function (x,y) rBind.fill.internal(x,y,fill),list(x,...))
   }
 }
 
-rbind2.fill.int<-function(x,y,fill=NA)
+rBind.fill.internal<-function(x,y,fill=NA)
 {
-  #if(is.null(dim(x)))
+  browser()
+  if (is.null(nrow(x)))
+       x<-matrix(x,nrow=1,dimnames=list(NULL,names(x)))
+  if (is.null(nrow(y)))
+      y<-matrix(y,nrow=1,dimnames=list(NULL,names(y)))
   y<-
   {
-    if('data.frame' %in% is(x) && !('Matrix' %in% is(y)))
+    if('data.frame' %in% is(x) && ('Matrix' %in% is(y)))
       as.data.frame(y)
+    else
     if('Matrix' %in% is(x))
       as(y,'Matrix')
     else
-      as(y,class(x))
+      y
   }
-#   if(is.null(names(x)))
-#     names(x)<-1:length(x)
+  nullNames<-FALSE
+  if(is.null(colnames(x)))
+    colnames(x)<-colnames(y)[1:ncol(x)]
+  if(is.null(colnames(y)))
+     colnames(y)<-colnames(x)[1:ncol(y)]
+  if(is.null(colnames(x)))
+  {
+    nullNames<-TRUE
+    colnames(x)<-1:ncol(x)
+    colnames(y)<-1:ncol(y)
+  }
   ymiss<-setdiff(colnames(x),colnames(y))
   ybind<-matrix(fill,nrow=nrow(y),ncol=length(ymiss))
   colnames(ybind)<-ymiss
@@ -321,7 +348,10 @@ rbind2.fill.int<-function(x,y,fill=NA)
   colnames(xbind)<-xmiss
   x<-cbind2(x,xbind)
   y<-cbind2(y,ybind)
-  return(rbind2(x,y[,colnames(x)]))
+  result<-rBind(x,y[,colnames(x)])
+  if(nullNames)
+    colnames(result)<-NULL
+  return(result)
 }
 
 as2<-function(object,class)
