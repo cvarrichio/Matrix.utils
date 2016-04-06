@@ -1,18 +1,18 @@
-#' Data.frame-like operations on sparse and dense \code{Matrix} objects
+#' Data.frame-Like Operations on Sparse and Dense \code{Matrix} Objects
 #' 
-#' Implements cast, aggregate, and join for \code{\link{Matrix}} and matrix-like
-#' objects.
+#' Implements data manipulation methods such as cast, aggregate, and merge/join
+#' for \code{\link{Matrix}} and matrix-like objects.
 #' 
 #' @name Matrix.utils
 #' @docType package
 #' @import Matrix
 #' @import grr
 #' @importFrom stats aggregate
-#' @importFrom methods is
+#' @importFrom methods is as
 #' @importFrom stats as.formula terms
 NULL
 
-#' Casts or pivots a long \code{data frame} into a wide sparse matrix.
+#' Casts or pivots a long \code{data frame} into a wide sparse matrix
 #' 
 #' Similar in function to \code{\link[reshape2]{dcast}}, but produces a sparse 
 #' \code{\link{Matrix}} as an output. Sparse matrices are beneficial for this 
@@ -34,6 +34,7 @@ NULL
 #' @param fun.aggregate name of aggregation function.  Defaults to 'sum'
 #' @param value.var name of column that stores values to be aggregated numerics
 #' @param as.factors if TRUE, treat all columns as factors, including
+#' @return a sparse \code{Matrix}
 #' @seealso \code{\link[reshape]{cast}}
 #' @seealso \code{\link[reshape2]{dcast}}
 #' @export
@@ -129,7 +130,7 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
   return(result)
 }
 
-#' Compute summary statistics of a Matrix.
+#' Compute summary statistics of a Matrix
 #' 
 #' Similar to \code{\link[stats]{aggregate}}.  Splits the matrix into groups as
 #' specified by groupings, which can be one or more variables. Aggregation
@@ -187,10 +188,10 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
 
 #'Merges two Matrices or matrix-like objects
 #'
-#'Implementation of \code{\link{merge}} for \code{\link{Matrix}}.  By explicitly 
+#'Implementation of \code{\link{merge}} for \code{\link{Matrix}}.  By explicitly
 #'calling \code{merge.Matrix} it will also work for \code{matrix}, for 
-#'\code{data.frame}, and \code{vector} objects as a much faster 
-#'alternative to the built-in \code{merge}.
+#'\code{data.frame}, and \code{vector} objects as a much faster alternative to 
+#'the built-in \code{merge}.
 #'
 #'#' \code{all.x/all.y} correspond to the four types of database joins in the 
 #'following way:
@@ -215,13 +216,12 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
 #'@export merge.Matrix
 #'@examples
 #' 
-#' orders<-Matrix(as.matrix(data.frame(orderNum=1:1000,
-#'    customer=sample(100,1000,TRUE))))
-#' cancelledOrders<-Matrix(as.matrix(data.frame(orderNum=sample(1000,100),
-#'    cancelled=1)))
-#' skus<-Matrix(as.matrix(data.frame(orderNum=sample(1000,10000,TRUE),
-#'    sku=sample(1000,10000,TRUE),
-#'    amount=runif(10000))))
+#' orders<-Matrix(as.matrix(data.frame(orderNum=1:1000, 
+#' customer=sample(100,1000,TRUE)))) 
+#' cancelledOrders<-Matrix(as.matrix(data.frame(orderNum=sample(1000,100), 
+#' cancelled=1))) 
+#' skus<-Matrix(as.matrix(data.frame(orderNum=sample(1000,10000,TRUE), 
+#' sku=sample(1000,10000,TRUE), amount=runif(10000)))) 
 #' a<-merge(orders,cancelledOrders,orders[,'orderNum'],cancelledOrders[,'orderNum'])
 #' b<-merge(orders,cancelledOrders,orders[,'orderNum'],cancelledOrders[,'orderNum'],all.x=FALSE)
 #' c<-merge(orders,skus,orders[,'orderNum'],skus[,'orderNum'])
@@ -237,28 +237,33 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
 #' orders<-data.frame(orderNum=as.character(sample(1e5, 1e6, TRUE)),
 #'    sku=sample(1e3, 1e6, TRUE),
 #'    customer=sample(1e4,1e6,TRUE),stringsAsFactors=FALSE)
-#' cancelledOrders<-data.frame(orderNum=as.character(sample(1e5,1e4)),cancelled=1,stringsAsFactors=FALSE)
+#' cancelledOrders<-data.frame(orderNum=as.character(sample(1e5,1e4)),
+#'    cancelled=1,stringsAsFactors=FALSE)
 #' system.time(a<-merge.Matrix(orders,cancelledOrders,orders[,'orderNum'],
 #'    cancelledOrders[,'orderNum']))
 #' system.time(b<-merge.data.frame(orders,cancelledOrders,all.x = TRUE,all.y=TRUE))
 #' system.time(c<-dplyr::full_join(orders,cancelledOrders))
-#' system.time({require(data.table); d<-merge(data.table(orders),data.table(cancelledOrders),by='orderNum',all=TRUE,allow.cartesian=TRUE)})
+#'system.time({require(data.table);
+#'d<-merge(data.table(orders),data.table(cancelledOrders),
+#'    by='orderNum',all=TRUE,allow.cartesian=TRUE)})
 #'
-#' orders<-data.frame(orderNum=sample(1e5, 1e6, TRUE),
-#'    sku=sample(1e3, 1e6, TRUE),
-#'    customer=sample(1e4,1e6,TRUE),stringsAsFactors=FALSE)
-#' cancelledOrders<-data.frame(orderNum=sample(1e5,1e4),cancelled=1,stringsAsFactors=FALSE)
-#' system.time(b<-merge.Matrix(orders,cancelledOrders,orders[,'orderNum'],
-#'    cancelledOrders[,'orderNum']))
-#' system.time(e<-dplyr::full_join(orders,cancelledOrders))
-#' system.time({require(data.table); d<-merge(data.table(orders),data.table(cancelledOrders),by='orderNum',all=TRUE,allow.cartesian=TRUE)})
-#' 
-#' #In certain cases, merge.Matrix can be much faster than alternatives.
-#'one<-as.character(1:1000000)
-#'two<-as.character(sample(1:1000000,1e5,TRUE))
-#'system.time(b<-merge.Matrix(one,two,one,two))
-#'system.time(c<-dplyr::full_join(data.frame(key=one),data.frame(key=two)))
-#'system.time({require(data.table); d<-merge(data.table(data.frame(key=one)),data.table(data.frame(key=two)),by='key',all=TRUE,allow.cartesian=TRUE)})
+#'orders<-data.frame(orderNum=sample(1e5, 1e6, TRUE), sku=sample(1e3, 1e6,
+#'TRUE), customer=sample(1e4,1e6,TRUE),stringsAsFactors=FALSE) 
+#'cancelledOrders<-data.frame(orderNum=sample(1e5,1e4),cancelled=1,stringsAsFactors=FALSE)
+#'system.time(b<-merge.Matrix(orders,cancelledOrders,orders[,'orderNum'], 
+#'cancelledOrders[,'orderNum'])) 
+#'system.time(e<-dplyr::full_join(orders,cancelledOrders)) 
+#'system.time({require(data.table);
+#'  d<-merge(data.table(orders),data.table(cancelledOrders),
+#'  by='orderNum',all=TRUE,allow.cartesian=TRUE)})
+#'
+#'#In certain cases, merge.Matrix can be much faster than alternatives. 
+#'one<-as.character(1:1000000) two<-as.character(sample(1:1000000,1e5,TRUE)) 
+#'system.time(b<-merge.Matrix(one,two,one,two)) 
+#'system.time(c<-dplyr::full_join(data.frame(key=one),data.frame(key=two))) 
+#'system.time({require(data.table);
+#'  d<-merge(data.table(data.frame(key=one)),data.table(data.frame(key=two)),
+#'  by='key',all=TRUE,allow.cartesian=TRUE)})
 #'}
 merge.Matrix<-function(x,y,by.x,by.y,all.x=TRUE,all.y=TRUE,...)
 {
@@ -278,30 +283,47 @@ merge.Matrix<-function(x,y,by.x,by.y,all.x=TRUE,all.y=TRUE,...)
 #' @export
 join.Matrix<-merge.Matrix
 
-#'Combine matrixes by row, fill in missing columns.
-#'
-#'rbinds a list of Matrix or matrix like objects, filling in missing columns.
-#'
-#'Similar to \code{\link{rbind.fill.matrix}}, but works for \code{\link{Matrix}} as
-#'well as all other R objects.  It is completely agnostic to class, and will
-#'produce an object of the class of the first input (or of class \code{matrix}
-#'if the first object is one dimensional).
-#'
-#'@param x,... Objects to combine.  If the first argument is a list and \code{..} is unpopulated, the objects in that list will be combined.
-#'@param fill value with which to fill unmatched columns
-#'@seealso \code{\link{rbind.fill}}
-#'@seealso \code{\link{rbind.fill.matrix}}
-#'@export
-#'@examples
-#'df1 = data.frame(x = c(1,2,3), y = c(4,5,6))
-#'rownames(df1) = c("a", "b", "c")
-#'df2 = data.frame(x = c(7,8), z = c(9,10))
-#'rownames(df2) = c("a", "d")
-#'rBind.fill(df1,df2,fill=NA)
-#'rBind.fill(as(df1,'Matrix'),df2,fill=0)
-#'rBind.fill(as.matrix(df1),as(df2,'Matrix'),c(1,2),fill=0)
-#'rBind.fill(c(1,2,3),list(4,5,6,7))
-#'rBind.fill(df1,c(1,2,3))
+#' Combine matrixes by row, fill in missing columns
+#' 
+#' rbinds a list of Matrix or matrix like objects, filling in missing columns.
+#' 
+#' Similar to \code{\link[plyr]{rbind.fill.matrix}}, but works for
+#' \code{\link{Matrix}} as well as all other R objects.  It is completely
+#' agnostic to class, and will produce an object of the class of the first input
+#' (or of class \code{matrix} if the first object is one dimensional).
+#' 
+#' The implementation is recursive, so it can handle an arbitrary number of 
+#' inputs, albeit inefficiently for large numbers of inputs.
+#' 
+#' This method is still experimental, but should work in most cases.  If the
+#' data sets consist solely of data frames, \code{\link[plyr]{rbind.fill}} is 
+#' preferred.
+#' 
+#' @param x,... Objects to combine.  If the first argument is a list and 
+#'   \code{..} is unpopulated, the objects in that list will be combined.
+#' @param fill value with which to fill unmatched columns
+#' @return a single object of the same class as the first input, or of class
+#'   \code{matrix} if the first object is one dimensional
+#' @seealso \code{\link[plyr]{rbind.fill}}
+#' @seealso \code{\link[plyr]{rbind.fill.matrix}}
+#' @export
+#' @examples
+#' df1 = data.frame(x = c(1,2,3), y = c(4,5,6))
+#' rownames(df1) = c("a", "b", "c")
+#' df2 = data.frame(x = c(7,8), z = c(9,10))
+#' rownames(df2) = c("a", "d")
+#' rBind.fill(df1,df2,fill=NA)
+#' rBind.fill(as(df1,'Matrix'),df2,fill=0)
+#' rBind.fill(as.matrix(df1),as(df2,'Matrix'),c(1,2),fill=0)
+#' rBind.fill(c(1,2,3),list(4,5,6,7))
+#' rBind.fill(df1,c(1,2,3,4))
+#' 
+#' m<-rsparsematrix(1000000,100,.001)
+#' m2<-m
+#' colnames(m)<-1:100
+#' colnames(m2)<-3:102
+#' system.time(b<-rBind.fill(m,m2))
+#' 
 rBind.fill<-function(x,...,fill=NA)
 {
   if (is.list(x) && !is.data.frame(x) && missing(...)) {
@@ -314,7 +336,6 @@ rBind.fill<-function(x,...,fill=NA)
 
 rBind.fill.internal<-function(x,y,fill=NA)
 {
-  browser()
   if (is.null(nrow(x)))
        x<-matrix(x,nrow=1,dimnames=list(NULL,names(x)))
   if (is.null(nrow(y)))
@@ -329,6 +350,7 @@ rBind.fill.internal<-function(x,y,fill=NA)
     else
       y
   }
+
   nullNames<-FALSE
   if(is.null(colnames(x)))
     colnames(x)<-colnames(y)[1:ncol(x)]
@@ -340,36 +362,18 @@ rBind.fill.internal<-function(x,y,fill=NA)
     colnames(x)<-1:ncol(x)
     colnames(y)<-1:ncol(y)
   }
-  ymiss<-setdiff(colnames(x),colnames(y))
+  ymiss<-colnames(x)[which(is.na(match(colnames(x),colnames(y))))]
   ybind<-matrix(fill,nrow=nrow(y),ncol=length(ymiss))
   colnames(ybind)<-ymiss
-  xmiss<-setdiff(colnames(y),colnames(x))
+  xmiss<-colnames(y)[which(is.na(match(colnames(y),colnames(x))))]
   xbind<-matrix(fill,nrow=nrow(x),ncol=length(xmiss))
   colnames(xbind)<-xmiss
   x<-cbind2(x,xbind)
   y<-cbind2(y,ybind)
-  result<-rBind(x,y[,colnames(x)])
+  result<-rbind2(x,y[,order(match(colnames(y),colnames(x)))])
   if(nullNames)
     colnames(result)<-NULL
   return(result)
-}
-
-as2<-function(object,class)
-{
-  result<-try(
-    {
-  if(class=='factor')
-    return(as.factor(as.character(object)))
-  if(class=='data.frame')
-    return(as.data.frame(object))
-  else
-    return(as(object,class))
-    }
-  ,silent = TRUE)
-  if (inherits(result,'try-error'))
-  {
-    resultList<-try(lapply(is()))
-  }
 }
 
 len<-function (data) 
