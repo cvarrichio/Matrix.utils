@@ -95,6 +95,7 @@ NULL
 #' }
 dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALSE)
 {
+  browser()
   alltms<-terms(formula,data=data)
   response<-rownames(attr(alltms,'factors'))[attr(alltms,'response')]
   tm<-attr(alltms,"term.labels")
@@ -125,7 +126,7 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
   if(isTRUE(response>0))
   {
     responses=all.vars(terms(as.formula(paste(response,'~0'))))
-    result<-aggregate.Matrix(result,form=paste('~0 +',response),data[,responses,drop=FALSE],fun=fun.aggregate)
+    result<-aggregate.Matrix(result,data[,responses,drop=FALSE],fun=fun.aggregate)
   }
   return(result)
 }
@@ -142,6 +143,14 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
 #' @param form \code{\link[stats]{formula}}
 #' @param fun name of aggregation function to be applied to all columns in data
 #' @param ... arguments to be passed to or from methods.  Currently ignored
+#' @return A sparse \code{Matrix}.  The rownames correspond to the values of the
+#' groupings or the interactions of groupings joined by a \code{_}.
+#'  
+#' There is an attribute \code{crosswalk} that includes the groupings as a data
+#' frame.  This is necessary because it is not possible to include character or 
+#' data frame groupings in a sparse Matrix.  If needed, one can 
+#' \code{cbind(attr(x,"crosswalk"),x)} to combine the groupings and the aggregates.
+#'  
 #' @seealso \code{\link[dplyr]{summarise}}
 #' @seealso \code{\link[plyr]{summarise}}
 #' @seealso \code{\link[stats]{aggregate}}
@@ -164,24 +173,30 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
 #'    customer=as.factor(sample(1e4,1e7,TRUE)),
 #'    state = sample(letters, 1e7, TRUE), amount=runif(1e7))
 #' system.time(d<-aggregate.Matrix(orders[,'amount',drop=FALSE],orders$orderNum))
+#' system.time(e<-aggregate.Matrix(orders[,'amount',drop=FALSE],orders[,c('customer','state')]))
 #' }
 aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
 {
-#   if(!is(x,'Matrix'))
-#     x<-Matrix(as.matrix(x),sparse=TRUE)
+  if(!is(x,'Matrix'))
+    x<-Matrix(as.matrix(x),sparse=TRUE)
   if(fun=='count')
     x<-x!=0
-  if(is(groupings,'Matrix'))
-    groupings<-as.matrix(groupings)
-  groupings<-data.frame(groupings)
-  groupings<-data.frame(lapply(groupings,as.factor))
+  groupings2<-groupings
+  if(is(groupings2,'Matrix'))
+    groupings2<-as.matrix(groupings2)
+  groupings2<-data.frame(groupings2)
+  groupings2<-data.frame(lapply(groupings2,as.factor))
+  groupings2<-data.frame(interaction(groupings2,sep = '_'))
+  colnames(groupings2)<-'A'
   if(is.null(form))
     form<-as.formula('~0+.')
   form<-as.formula(form)
-  mapping<-dMcast(groupings,form)
+  mapping<-dMcast(groupings2,form)
+  colnames(mapping)<-substring(colnames(mapping),2)
   result<-t(mapping) %*% x
   if(fun=='mean')
-    result@x<-result@x/(aggregate.Matrix(x,groupings,fun='count'))@x
+    result@x<-result@x/(aggregate.Matrix(x,groupings2,fun='count'))@x
+  attr(result,'crosswalk')<-extract(groupings,match(rownames(result),groupings2$A))
   return(result)
 }
 
@@ -383,3 +398,4 @@ len<-function (data)
 }
 
 setAs('Matrix','data.frame',function (from) as.data.frame(as.matrix(from)))
+
