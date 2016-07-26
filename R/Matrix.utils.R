@@ -34,6 +34,8 @@ NULL
 #' @param fun.aggregate name of aggregation function.  Defaults to 'sum'
 #' @param value.var name of column that stores values to be aggregated numerics
 #' @param as.factors if TRUE, treat all columns as factors, including
+#' @param factor.nas if TRUE, treat factors with NAs as new levels.  Otherwise, 
+#'  rows with NAs will receive zeroes in all columns for that factor
 #' @return a sparse \code{Matrix}
 #' @seealso \code{\link[reshape]{cast}}
 #' @seealso \code{\link[reshape2]{dcast}}
@@ -93,9 +95,8 @@ NULL
 #' system.time(c<-dMcast(orders,orderNum~sku,
 #'    value.var = 'amount')) # 36.33 seconds, object size = 175Mb
 #' }
-dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALSE)
+dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALSE,factor.nas=TRUE)
 {
-  browser()
   alltms<-terms(formula,data=data)
   response<-rownames(attr(alltms,'factors'))[attr(alltms,'response')]
   tm<-attr(alltms,"term.labels")
@@ -106,12 +107,27 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
   newterms<-unlist(lapply(i2,function (x) paste("paste(",paste(x,collapse=','),",","sep='_'",")")))
   newterms<-c(simple,newterms)
   newformula<-as.formula(paste('~0+',paste(newterms,collapse='+')))
+  allvars<-all.vars(alltms)
+  #Allows NAs to pass
+  data<-model.frame(data[,c(allvars,value.var),drop=FALSE],na.action = na.pass)
   if(as.factors)
-  {
-    allvars<-all.vars(alltms)
-    data[,allvars]<-lapply(data[,allvars],as.factor)
-  }
-  result<-sparse.model.matrix(newformula,data,drop.unused.levels = TRUE)
+    data<-data.frame(lapply(data,as.factor))
+  factors<-unlist(lapply(data,is.factor))
+  #Prevents errors with 1 or fewer distinct levels
+  data[,factors]<-lapply(data[,factors,drop=FALSE],function (x) 
+                      {
+                        if(factor.nas)
+                          if(any(is.na(x)))
+                          {
+                            levels(x)<-c(levels(x),'NA')
+                            x[is.na(x)]<-'NA'
+                          }
+                        x<-droplevels(x)
+                        y<-contrasts(x,contrasts=FALSE,sparse=TRUE)
+                        attr(x,'contrasts')<-y
+                        return(x)
+                      })
+  result<-sparse.model.matrix(newformula,data,drop.unused.levels = FALSE)
   brokenNames<-grep('paste(',colnames(result),fixed = TRUE)
   colnames(result)[brokenNames]<-lapply(colnames(result)[brokenNames],function (x) {
     x<-gsub('paste(',replacement='',x=x,fixed = TRUE) 
