@@ -94,6 +94,11 @@ NULL
 #'    value.var = 'amount')) # Does not return 
 #' system.time(c<-dMcast(orders,orderNum~sku,
 #'    value.var = 'amount')) # 36.33 seconds, object size = 175Mb
+#'    
+#' #Wide and long
+#' tmp<-data.frame(lapply(letters,function (x) (rep(letters,15000))))
+#' colnames(tmp)<-letters
+#' system.time(d<-dMcast(tmp,~.))
 #' }
 dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALSE,factor.nas=TRUE)
 {
@@ -112,6 +117,8 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
   data<-model.frame(data[,c(allvars,value.var),drop=FALSE],na.action = na.pass)
   if(as.factors)
     data<-data.frame(lapply(data,as.factor))
+  characters<-unlist(lapply(data,is.character))
+  data[,characters]<-lapply(data[,characters,drop=FALSE],as.factor)
   factors<-unlist(lapply(data,is.factor))
   #Prevents errors with 1 or fewer distinct levels
   data[,factors]<-lapply(data[,factors,drop=FALSE],function (x) 
@@ -122,12 +129,16 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
                             levels(x)<-c(levels(x),'NA')
                             x[is.na(x)]<-'NA'
                           }
-                        x<-droplevels(x)
+                        if(length(x)<50000)
+                          x<-factor(as.character(x))
+                        else
+                          x<-droplevels(x)
                         y<-contrasts(x,contrasts=FALSE,sparse=TRUE)
                         attr(x,'contrasts')<-y
                         return(x)
                       })
   result<-sparse.model.matrix(newformula,data,drop.unused.levels = FALSE)
+  #result<-MatrixModels::model.Matrix(newformula,data,drop.unused.levels = FALSE,sparse=TRUE)
   brokenNames<-grep('paste(',colnames(result),fixed = TRUE)
   colnames(result)[brokenNames]<-lapply(colnames(result)[brokenNames],function (x) {
     x<-gsub('paste(',replacement='',x=x,fixed = TRUE) 
@@ -198,9 +209,8 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
   if(fun=='count')
     x<-x!=0
   groupings2<-groupings
-  if(is(groupings2,'Matrix'))
-    groupings2<-as.matrix(groupings2)
-  groupings2<-data.frame(groupings2)
+  if(!is(groupings2,'data.frame'))
+    groupings2<-data.frame(groupings2)
   groupings2<-data.frame(lapply(groupings2,as.factor))
   groupings2<-data.frame(interaction(groupings2,sep = '_'))
   colnames(groupings2)<-'A'
@@ -415,3 +425,196 @@ len<-function (data)
 
 setAs('Matrix','data.frame',function (from) as.data.frame(as.matrix(from)))
 
+setAs('matrix','data.frame',function (from) as.data.frame(from))
+
+#setAs('vector','data.frame',function (from) data.frame(from))
+
+sparse.model.matrix<-
+  function (object, data = environment(object), contrasts.arg = NULL, 
+            xlev = NULL, transpose = FALSE, drop.unused.levels = FALSE, 
+            row.names = TRUE, verbose = FALSE, ...) 
+  {
+    t <- if (missing(data)) 
+      terms(object)
+    else terms(object, data = data)
+    if (is.null(attr(data, "terms"))) 
+      data <- model.frame(object, data, xlev = xlev)
+    else {
+      reorder <- match(sapply(attr(t, "variables"), deparse, 
+                              width.cutoff = 500)[-1L], names(data))
+      if (anyNA(reorder)) 
+        stop("model frame and formula mismatch in model.matrix()")
+      if (!Matrix:::isSeq(reorder, ncol(data), Ostart = FALSE)) 
+        data <- data[, reorder, drop = FALSE]
+    }
+    int <- attr(t, "response")
+    if (length(data)) {
+      contr.funs <- as.character(getOption("contrasts"))
+      namD <- names(data)
+      for (i in namD) if (is.character(data[[i]])) {
+        data[[i]] <- factor(data[[i]])
+        warning(gettextf("variable '%s' converted to a factor", 
+                         i), domain = NA)
+      }
+      isF <- sapply(data, function(x) is.factor(x) || is.logical(x))
+      isF[int] <- FALSE
+      isOF <- sapply(data, is.ordered)
+      for (nn in namD[isF]) if (is.null(attr(data[[nn]], "contrasts"))) 
+        contrasts(data[[nn]]) <- contr.funs[1 + isOF[nn]]
+      if (!is.null(contrasts.arg) && is.list(contrasts.arg)) {
+        if (is.null(namC <- names(contrasts.arg))) 
+          stop("invalid 'contrasts.arg' argument")
+        for (nn in namC) {
+          if (is.na(ni <- match(nn, namD))) 
+            warning(gettextf("variable '%s' is absent, its contrast will be ignored", 
+                             nn), domain = NA)
+          else {
+            ca <- contrasts.arg[[nn]]
+            if (is.matrix(ca)) 
+              contrasts(data[[ni]], ncol(ca)) <- ca
+            else contrasts(data[[ni]]) <- contrasts.arg[[nn]]
+          }
+        }
+      }
+    }
+    else {
+      isF <- FALSE
+      data <- cbind(data, x = 0)
+    }
+    if (verbose) {
+      cat("model.spmatrix(t, data, ..)  with t =\n")
+      str(t, give.attr = FALSE)
+    }
+    ans <- model.spmatrix(t, data, transpose = transpose, drop.unused.levels = drop.unused.levels, 
+                          row.names = row.names, verbose = verbose)
+    attr(ans, "contrasts") <- lapply(data[isF], function(x) attr(x, 
+                                                                 "contrasts"))
+    ans
+  }
+
+model.spmatrix<-function (trms, mf, transpose = FALSE, drop.unused.levels = FALSE, 
+                          row.names = TRUE, verbose = FALSE) 
+{
+  stopifnot(is.data.frame(mf))
+  n <- nrow(mf)
+  if (row.names) 
+    rnames <- row.names(mf)
+  fnames <- names(mf <- unclass(mf))
+  attributes(mf) <- list(names = fnames)
+  if (length(factorPattern <- attr(trms, "factors"))) {
+    d <- dim(factorPattern)
+    nVar <- d[1]
+    nTrm <- d[2]
+    n.fP <- dimnames(factorPattern)
+    fnames <- n.fP[[1]]
+    Names <- n.fP[[2]]
+  }
+  else {
+    nVar <- nTrm <- 0L
+    fnames <- Names <- character(0)
+  }
+  stopifnot((m <- length(mf)) >= nVar)
+  if (verbose) 
+    cat(sprintf("model.spm..(): (n=%d, nVar=%d (m=%d), nTrm=%d)\n", 
+                n, nVar, m, nTrm))
+  if (m > nVar) 
+    mf <- mf[seq_len(nVar)]
+  stopifnot(fnames == names(mf))
+  noVar <- nVar == 0
+  is.f <- if (noVar) 
+    logical(0)
+  else vapply(mf, function(.) is.factor(.) | is.logical(.), 
+              NA)
+  indF <- which(is.f)
+  if (verbose) {
+    cat(" --> indF =\n")
+    print(indF)
+  }
+  hasInt <- attr(trms, "intercept") == 1
+  if (!hasInt && length(indF)) {
+    if (any(i1 <- factorPattern[indF, ] == 1)) 
+      factorPattern[indF, ][which.max(i1)] <- 2L
+    else {
+    }
+  }
+  f.matr <- structure(vector("list", length = length(indF)), 
+                      names = fnames[indF])
+  i.f <- 0
+  for (i in seq_len(nVar)) {
+    nam <- fnames[i]
+    f <- mf[[i]]
+    if (is.f[i]) {
+      fp <- factorPattern[i, ]
+      contr <- attr(f, "contrasts")
+      f.matr[[(i.f <- i.f + 1)]] <- lapply(fac2Sparse(f, 
+                                                      to = "d", drop.unused.levels = drop.unused.levels, 
+                                                      factorPatt12 = 1:2 %in% fp, contrasts.arg = contr), 
+                                           function(s) {
+                                             if (is.null(s)) 
+                                               return(s)
+                                             rownames(s) <- paste0(nam, if (is.null(rownames(s))) 
+                                               seq_len(nrow(s))
+                                               else rownames(s))
+                                             s
+                                           })
+    }
+    
+    else {
+      if (any(iA <- (cl <- class(f)) == "AsIs")) 
+        class(f) <- if (length(cl) > 1L) 
+          cl[!iA]
+      nr <- if (is.matrix(f)) 
+        nrow(f <- t(f))
+      else (dim(f) <- c(1L, length(f)))[1]
+      if (is.null(rownames(f))) 
+        rownames(f) <- if (nr == 1) 
+          nam
+      else paste0(nam, seq_len(nr))
+      mf[[i]] <- f
+    }
+  }
+  browser()
+  if (verbose) {
+    cat(" ---> f.matr list :\n")
+    str(f.matr, max = as.integer(verbose))
+    fNms <- format(dQuote(Names))
+    dim.string <- gsub("5", as.character(floor(1 + log10(n))), 
+                       " -- concatenating (r, rj): dim = (%5d,%5d) | (%5d,%5d)\n")
+  }
+  getR <- function(N) if (!is.null(r <- f.matr[[N]])) 
+    r[[factorPattern[N, nm]]]
+  else mf[[N]]
+  vNms <- "(Intercept)"[hasInt]
+  counts <- integer(nTrm)
+  r <- if (hasInt) 
+    new("dgCMatrix", i = 0:(n - 1L), p = c(0L, n), Dim = c(n, 
+                                                           1L), x = rep.int(1, n))
+  else new("dgCMatrix", Dim = c(n, 0L))
+  if (transpose) 
+    r <- t(r)
+  iTrm <- seq_len(nTrm)
+  for (j in iTrm) {
+    nm <- Names[j]
+    if (verbose) 
+      cat(sprintf("term[%2d] %s .. ", j, fNms[j]))
+    nmSplits <- strsplit(nm, ":", fixed = TRUE)[[1]]
+    rj <- Matrix:::sparseInt.r(lapply(nmSplits, getR), do.names = TRUE, 
+                      forceSparse = TRUE, verbose = verbose)
+    if (verbose) 
+      cat(sprintf(dim.string, nrow(r), ncol(r), nrow(rj), 
+                  ncol(rj)))
+    browser()
+    r <- if (transpose) 
+      .Call(Csparse_vertcat, r, rj)
+    else .Call(Matrix:::Csparse_horzcat, r, t(rj))
+    vNms <- c(vNms, dimnames(rj)[[1]])
+    counts[j] <- nrow(rj)
+  }
+  rns <- if (row.names) 
+    rnames
+  dimnames(r) <- if (transpose) 
+    list(vNms, rns)
+  else list(rns, vNms)
+  attr(r, "assign") <- c(if (hasInt) 0L, rep(iTrm, counts))
+  r
+}
