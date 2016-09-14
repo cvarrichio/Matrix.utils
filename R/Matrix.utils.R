@@ -72,7 +72,7 @@ NULL
 #' system.time(b<-reshape2::dcast(orders,sku~state,sum,
 #'    value.var = 'amount')) # 2.61 seconds 
 #' system.time(c<-dMcast(orders,sku~state,
-#'    value.var = 'amount')) # 8.69 seconds 
+#'    value.var = 'amount')) # 8.66 seconds 
 #'    
 #' # However, this situation changes as the result set becomes larger 
 #' system.time(a<-dcast.data.table(as.data.table(orders),customer~sku,sum,
@@ -80,7 +80,7 @@ NULL
 #' system.time(b<-reshape2::dcast(orders,customer~sku,sum,
 #'    value.var = 'amount')) # 34.7 seconds 
 #'  system.time(c<-dMcast(orders,customer~sku,
-#'    value.var = 'amount')) # 14.88 seconds 
+#'    value.var = 'amount')) # 14.55 seconds 
 #'    
 #' # More complicated: 
 #' system.time(a<-dcast.data.table(as.data.table(orders),customer~sku+state,sum,
@@ -88,13 +88,16 @@ NULL
 #' system.time(b<-reshape2::dcast(orders,customer~sku+state,sum,
 #'    value.var = 'amount')) # Does not return 
 #' system.time(c<-dMcast(orders,customer~sku:state,
-#'    value.var = 'amount')) #  seconds, object size = 115.4 Mb
+#'    value.var = 'amount')) # 21.53 seconds, object size = 116.1 Mb
 #' 
 #' system.time(a<-dcast.data.table(as.data.table(orders),orderNum~sku,sum,
 #'    value.var = 'amount')) # Does not return 
 #' system.time(c<-dMcast(orders,orderNum~sku,
-#'    value.var = 'amount')) # 26.22 seconds, object size = 175Mb
+#'    value.var = 'amount')) # 24.83 seconds, object size = 175Mb
 #'    
+#' system.time(c<-dMcast(orders,sku:state~customer,
+#'    value.var = 'amount')) # 17.97 seconds, object size = 175Mb
+#'        
 #' #Wide and long
 #' tmp<-data.frame(lapply(letters,function (x) (rep(letters,15000))))
 #' colnames(tmp)<-letters
@@ -102,6 +105,9 @@ NULL
 #' }
 dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALSE,factor.nas=TRUE,droplevels=TRUE)
 {
+  values<-1
+  if(!is.null(value.var))
+    values<-data[,value.var]
   alltms<-terms(formula,data=data)
   response<-rownames(attr(alltms,'factors'))[attr(alltms,'response')]
   tm<-attr(alltms,"term.labels")
@@ -114,34 +120,30 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
   newformula<-as.formula(paste('~0+',paste(newterms,collapse='+')))
   allvars<-all.vars(alltms)
   #Allows NAs to pass
-  data<-model.frame(data = data[,c(allvars,value.var),drop=FALSE],na.action = na.pass)
+  data<-data[,c(allvars),drop=FALSE]
+  attr(data,'na.action')<-na.pass
   if(as.factors)
     data<-data.frame(lapply(data,as.factor))
-  if(droplevels)
+  characters<-unlist(lapply(data,is.character))
+  data[,characters]<-lapply(data[,characters,drop=FALSE],as.factor)
+  factors<-unlist(lapply(data,is.factor))
+  #Prevents errors with 1 or fewer distinct levels
+  data[,factors]<-lapply(data[,factors,drop=FALSE],function (x) 
   {
-    characters<-unlist(lapply(data,is.character))
-    #data[,characters]<-lapply(data[,characters,drop=FALSE],as.factor)
-    factors<-unlist(lapply(data,is.factor))
-    #Prevents errors with 1 or fewer distinct levels
-    data[,factors]<-lapply(data[,factors,drop=FALSE],function (x) 
-                        {
-                          if(factor.nas)
-                            if(any(is.na(x)))
-                            {
-                              levels(x)<-c(levels(x),'NA')
-                              x[is.na(x)]<-'NA'
-                            }
-                          if(length(x)<50000)
-                            x<-factor(as.character(x))
-                          else
-                            x<-droplevels(x)
-                          y<-contrasts(x,contrasts=FALSE,sparse=TRUE)
-                          attr(x,'contrasts')<-y
-                          return(x)
-                        })
-  }
-  result<-sparse.model.matrix(newformula,data,drop.unused.levels = FALSE,row.names = FALSE)
-  #result<-MatrixModels::model.Matrix(newformula,data,drop.unused.levels = FALSE,sparse=TRUE)
+    if(factor.nas)
+      if(any(is.na(x)))
+      {
+        levels(x)<-c(levels(x),'NA')
+        x[is.na(x)]<-'NA'
+      }
+    if(droplevels)
+        if(nlevels(x)!=length(unique(x)))
+          x<-factor(as.character(x))
+    y<-contrasts(x,contrasts=FALSE,sparse=TRUE)
+    attr(x,'contrasts')<-y
+    return(x)
+  })
+  result<-sparse.model.matrix(newformula,data,drop.unused.levels = FALSE,row.names=FALSE)
   brokenNames<-grep('paste(',colnames(result),fixed = TRUE)
   colnames(result)[brokenNames]<-lapply(colnames(result)[brokenNames],function (x) {
     x<-gsub('paste(',replacement='',x=x,fixed = TRUE) 
@@ -149,14 +151,12 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
     x<-gsub(pattern='_sep = \"_\")',replacement='',x=x,fixed=TRUE)
     return(x)
   })
-  values<-1
-  if(!is.null(value.var))
-    values<-data[,value.var]
+
   result<-result*values
   if(isTRUE(response>0))
   {
     responses=all.vars(terms(as.formula(paste(response,'~0'))))
-    result<-aggregate.Matrix(result,data[,responses,drop=FALSE],fun=fun.aggregate)
+    result<-aggregate.Matrix(result,data[,responses,drop=FALSE],fun=fun.aggregate,droplevels = FALSE)
   }
   return(result)
 }
@@ -205,7 +205,7 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
 #' system.time(d<-aggregate.Matrix(orders[,'amount',drop=FALSE],orders$orderNum))
 #' system.time(e<-aggregate.Matrix(orders[,'amount',drop=FALSE],orders[,c('customer','state')]))
 #' }
-aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
+aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',droplevels=TRUE,...)
 {
   if(!is(x,'Matrix'))
     x<-Matrix(as.matrix(x),sparse=TRUE)
@@ -220,7 +220,7 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
   if(is.null(form))
     form<-as.formula('~0+.')
   form<-as.formula(form)
-  mapping<-dMcast(groupings2,form,droplevels = FALSE)
+  mapping<-dMcast(groupings2,form,droplevels = droplevels)
   colnames(mapping)<-substring(colnames(mapping),2)
   result<-t(mapping) %*% x
   if(fun=='mean')
