@@ -113,33 +113,33 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
   newterms<-c(simple,newterms)
   newformula<-as.formula(paste('~0+',paste(newterms,collapse='+')))
   allvars<-all.vars(alltms)
+  data<-data[,c(allvars,value.var)]
   #Allows NAs to pass
-  data<-model.frame(data = data[,c(allvars,value.var),drop=FALSE],na.action = na.pass)
+  attr(data,'na.action')<-na.pass
   if(as.factors)
     data<-data.frame(lapply(data,as.factor))
-  if(droplevels)
-  {
-    characters<-unlist(lapply(data,is.character))
-    #data[,characters]<-lapply(data[,characters,drop=FALSE],as.factor)
-    factors<-unlist(lapply(data,is.factor))
-    #Prevents errors with 1 or fewer distinct levels
-    data[,factors]<-lapply(data[,factors,drop=FALSE],function (x) 
-                        {
-                          if(factor.nas)
-                            if(any(is.na(x)))
-                            {
-                              levels(x)<-c(levels(x),'NA')
-                              x[is.na(x)]<-'NA'
-                            }
+  characters<-unlist(lapply(data,is.character))
+  data[,characters]<-lapply(data[,characters,drop=FALSE],as.factor)
+  factors<-unlist(lapply(data,is.factor))
+  #Prevents errors with 1 or fewer distinct levels
+  data[,factors]<-lapply(data[,factors,drop=FALSE],function (x) 
+                      {
+                        if(factor.nas)
+                          if(any(is.na(x)))
+                          {
+                            levels(x)<-c(levels(x),'NA')
+                            x[is.na(x)]<-'NA'
+                          }
+                        if(droplevels)
                           if(length(x)<50000)
                             x<-factor(as.character(x))
                           else
                             x<-droplevels(x)
-                          y<-contrasts(x,contrasts=FALSE,sparse=TRUE)
-                          attr(x,'contrasts')<-y
-                          return(x)
-                        })
-  }
+                        y<-contrasts(x,contrasts=FALSE,sparse=TRUE)
+                        attr(x,'contrasts')<-y
+                        return(x)
+                      })
+
   result<-sparse.model.matrix(newformula,data,drop.unused.levels = FALSE,row.names = FALSE)
   #result<-MatrixModels::model.Matrix(newformula,data,drop.unused.levels = FALSE,sparse=TRUE)
   brokenNames<-grep('paste(',colnames(result),fixed = TRUE)
