@@ -7,9 +7,8 @@
 #' @docType package
 #' @import Matrix
 #' @import grr
-#' @importFrom stats aggregate
+#' @importFrom stats aggregate as.formula terms contrasts na.omit na.pass
 #' @importFrom methods is as
-#' @importFrom stats as.formula terms
 NULL
 
 #' Casts or pivots a long \code{data frame} into a wide sparse matrix
@@ -36,6 +35,8 @@ NULL
 #' @param as.factors if TRUE, treat all columns as factors, including
 #' @param factor.nas if TRUE, treat factors with NAs as new levels.  Otherwise, 
 #'  rows with NAs will receive zeroes in all columns for that factor
+#' @param drop.unused.levels should factors have unused levels dropped? Defaults to TRUE, 
+#'  in contrast to \code{\link{model.matrix}}
 #' @return a sparse \code{Matrix}
 #' @seealso \code{\link[reshape]{cast}}
 #' @seealso \code{\link[reshape2]{dcast}}
@@ -94,16 +95,12 @@ NULL
 #'    value.var = 'amount')) # Does not return 
 #' system.time(c<-dMcast(orders,orderNum~sku,
 #'    value.var = 'amount')) # 24.83 seconds, object size = 175Mb
-#'    
+#' 
 #' system.time(c<-dMcast(orders,sku:state~customer,
 #'    value.var = 'amount')) # 17.97 seconds, object size = 175Mb
 #'        
-#' #Wide and long
-#' tmp<-data.frame(lapply(letters,function (x) (rep(letters,15000))))
-#' colnames(tmp)<-letters
-#' system.time(d<-dMcast(tmp,~.))
 #' }
-dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALSE,factor.nas=TRUE,droplevels=TRUE)
+dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALSE,factor.nas=TRUE,drop.unused.levels=TRUE)
 {
   values<-1
   if(!is.null(value.var))
@@ -119,9 +116,7 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
   newterms<-c(simple,newterms)
   newformula<-as.formula(paste('~0+',paste(newterms,collapse='+')))
   allvars<-all.vars(alltms)
-  #Allows NAs to pass
   data<-data[,c(allvars),drop=FALSE]
-  attr(data,'na.action')<-na.pass
   if(as.factors)
     data<-data.frame(lapply(data,as.factor))
   characters<-unlist(lapply(data,is.character))
@@ -136,13 +131,15 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
         levels(x)<-c(levels(x),'NA')
         x[is.na(x)]<-'NA'
       }
-    if(droplevels)
-        if(nlevels(x)!=length(unique(x)))
+    if(drop.unused.levels)
+        if(nlevels(x)!=length(na.omit(unique(x))))
           x<-factor(as.character(x))
     y<-contrasts(x,contrasts=FALSE,sparse=TRUE)
     attr(x,'contrasts')<-y
     return(x)
   })
+  #Allows NAs to pass
+  attr(data,'na.action')<-na.pass
   result<-sparse.model.matrix(newformula,data,drop.unused.levels = FALSE,row.names=FALSE)
   brokenNames<-grep('paste(',colnames(result),fixed = TRUE)
   colnames(result)[brokenNames]<-lapply(colnames(result)[brokenNames],function (x) {
@@ -156,31 +153,35 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
   if(isTRUE(response>0))
   {
     responses=all.vars(terms(as.formula(paste(response,'~0'))))
-    result<-aggregate.Matrix(result,data[,responses,drop=FALSE],fun=fun.aggregate,droplevels = FALSE)
+    result<-aggregate.Matrix(result,data[,responses,drop=FALSE],fun=fun.aggregate)
   }
   return(result)
 }
 
 #' Compute summary statistics of a Matrix
 #' 
-#' Similar to \code{\link[stats]{aggregate}}.  Splits the matrix into groups as
-#' specified by groupings, which can be one or more variables. Aggregation
+#' Similar to \code{\link[stats]{aggregate}}.  Splits the matrix into groups as 
+#' specified by groupings, which can be one or more variables. Aggregation 
 #' function will be applied to all columns in data, or as specified in formula. 
 #' Warning: groupings will be made dense if it is sparse, though data will not.
 #' 
 #' @param x a \code{\link{Matrix}} or matrix-like object
-#' @param groupings an object coercible to a group of factors defining the groups
+#' @param groupings an object coercible to a group of factors defining the
+#'   groups
 #' @param form \code{\link[stats]{formula}}
-#' @param fun name of aggregation function to be applied to all columns in data
+#' @param fun character string specifying the name of aggregation function to be
+#'   applied to all columns in data.  Currently on "sum", "count", and "mean"
+#'   are supported.
 #' @param ... arguments to be passed to or from methods.  Currently ignored
 #' @return A sparse \code{Matrix}.  The rownames correspond to the values of the
-#' groupings or the interactions of groupings joined by a \code{_}.
-#'  
-#' There is an attribute \code{crosswalk} that includes the groupings as a data
-#' frame.  This is necessary because it is not possible to include character or 
-#' data frame groupings in a sparse Matrix.  If needed, one can 
-#' \code{cbind(attr(x,"crosswalk"),x)} to combine the groupings and the aggregates.
-#'  
+#'   groupings or the interactions of groupings joined by a \code{_}.
+#'   
+#'   There is an attribute \code{crosswalk} that includes the groupings as a
+#'   data frame.  This is necessary because it is not possible to include
+#'   character or data frame groupings in a sparse Matrix.  If needed, one can 
+#'   \code{cbind(attr(x,"crosswalk"),x)} to combine the groupings and the
+#'   aggregates.
+#'   
 #' @seealso \code{\link[dplyr]{summarise}}
 #' @seealso \code{\link[plyr]{summarise}}
 #' @seealso \code{\link[stats]{aggregate}}
@@ -205,7 +206,7 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
 #' system.time(d<-aggregate.Matrix(orders[,'amount',drop=FALSE],orders$orderNum))
 #' system.time(e<-aggregate.Matrix(orders[,'amount',drop=FALSE],orders[,c('customer','state')]))
 #' }
-aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',droplevels=TRUE,...)
+aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
 {
   if(!is(x,'Matrix'))
     x<-Matrix(as.matrix(x),sparse=TRUE)
@@ -213,14 +214,14 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',droplevels=TRUE,
     x<-x!=0
   groupings2<-groupings
   if(!is(groupings2,'data.frame'))
-    groupings2<-data.frame(groupings2)
+    groupings2<-as(groupings2,'data.frame')
   groupings2<-data.frame(lapply(groupings2,as.factor))
   groupings2<-data.frame(interaction(groupings2,sep = '_'))
   colnames(groupings2)<-'A'
   if(is.null(form))
     form<-as.formula('~0+.')
   form<-as.formula(form)
-  mapping<-dMcast(groupings2,form,droplevels = droplevels)
+  mapping<-dMcast(groupings2,form)
   colnames(mapping)<-substring(colnames(mapping),2)
   result<-t(mapping) %*% x
   if(fun=='mean')
@@ -431,4 +432,4 @@ setAs('Matrix','data.frame',function (from) as.data.frame(as.matrix(from)))
 
 setAs('matrix','data.frame',function (from) as.data.frame(from))
 
-#setAs('vector','data.frame',function (from) data.frame(from))data.frame(lapply(data1,function(x) { if(is.character(x) |is.factor(x)) { value<-1; name<-paste0(colnames(x),x) } else {value<-x;name<-colnames(x)}; return(setNames(value,name))}))
+setAs('vector','data.frame',function (from) data.frame(from))

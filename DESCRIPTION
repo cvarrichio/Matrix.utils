@@ -1,9 +1,9 @@
 Package: Matrix.utils
 Title: Data.frame-Like Operations on Sparse and Dense Matrix Objects
-Version: 0.9.3
+Version: 0.9.4
 Author: Craig Varrichio <canthony427@gmail.com>
 Maintainer: Craig Varrichio <canthony427@gmail.com>
-Description:  Implements data manipulation methods such as cast, aggregate, and merge/join for Matrix and matrix-like objects.
+Description: Implements data manipulation methods such as cast, aggregate, and merge/join for Matrix and matrix-like objects.
 Depends:
     R (>= 3.0.0),
     Matrix
@@ -14,8 +14,8 @@ Imports:
 Suggests:
 	reshape2,
 	data.table,
-	dplyr
+	dplyr,
+    testthat
 License: GPL-3
 LazyData: true
 RoxygenNote: 5.0.1
-
