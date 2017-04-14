@@ -165,12 +165,15 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
 #' function will be applied to all columns in data, or as specified in formula. 
 #' Warning: groupings will be made dense if it is sparse, though data will not.
 #' 
+#' \code{aggregate.Matrix} uses its own implementations of functions and should
+#' be passed a string in the \code{fun} argument.
+#' 
 #' @param x a \code{\link{Matrix}} or matrix-like object
 #' @param groupings an object coercible to a group of factors defining the
 #'   groups
 #' @param form \code{\link[stats]{formula}}
 #' @param fun character string specifying the name of aggregation function to be
-#'   applied to all columns in data.  Currently on "sum", "count", and "mean"
+#'   applied to all columns in data.  Currently "sum", "count", and "mean"
 #'   are supported.
 #' @param ... arguments to be passed to or from methods.  Currently ignored
 #' @return A sparse \code{Matrix}.  The rownames correspond to the values of the
@@ -192,7 +195,12 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
 #'    orderNum=sample(1000,10000,TRUE),
 #'    sku=sample(1000,10000,TRUE),
 #'    amount=runif(10000))),sparse=TRUE)
-#' a<-aggregate.Matrix(skus[,'amount'],skus[,'sku',drop=FALSE])
+#'#Calculate sums for each sku
+#' a<-aggregate.Matrix(skus[,'amount'],skus[,'sku',drop=FALSE],fun='sum')
+#'#Calculate counts for each sku
+#' b<-aggregate.Matrix(skus[,'amount'],skus[,'sku',drop=FALSE],fun='count')
+#'#Calculate mean for each sku
+#' c<-aggregate.Matrix(skus[,'amount'],skus[,'sku',drop=FALSE],fun='mean')
 #' 
 #' m<-rsparsematrix(1000000,100,.001)
 #' labels<-as.factor(sample(1e4,1e6,TRUE))
@@ -230,6 +238,26 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
   return(result)
 }
 
+aggregate2.Matrix<-function(x,groupings=NULL,form=NULL,fun=sum,...)
+{
+  #if(!is(x,'Matrix'))
+    x<-as.matrix(x)
+  groupings2<-groupings
+  if(!is(groupings2,'data.frame'))
+    groupings2<-as(groupings2,'data.frame')
+  groupings2<-data.frame(lapply(groupings2,as.factor))
+  groupings2<-interaction(groupings2,sep = '_')
+  index<-grr::order2(groupings2)
+  breaks<-which(!duplicated(groupings2[index]))
+  results1<-fun(x[1:breaks[1],])
+  results<-matrix(results1,ncol=length(results1),nrow=length(breaks))
+  for (i in seq_len(length(breaks)-1)) 
+  {
+    results[i+1]<-fun(x[(breaks[i]+1):breaks[i+1],])
+  }
+  return(results)
+}
+  
 
 #'Merges two Matrices or matrix-like objects
 #'
@@ -248,23 +276,28 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
 #'
 #'Note that \code{NA} values will match other \code{NA} values.
 #'
-#'@param x \code{Matrix} or matrix-like object
-#'@param y \code{Matrix} or matrix-like object
+#'@param x,y \code{Matrix} or matrix-like object
 #'@param by.x vector indicating the names to match from \code{Matrix} x
 #'@param by.y vector indicating the names to match from \code{Matrix} y
 #'@param all.x logical; if \code{TRUE}, then each value in \code{x} will be 
 #'  included even if it has no matching values in \code{y}
 #'@param all.y logical; if \code{TRUE}, then each value in \code{y} will be 
 #'  included even if it has no matching values in \code{x}
+#'@param out.class the class of the output object.  Defaults to the class of x. 
+#'  Note that some output classes are not possible due to R coercion
+#'  capabilities, such as converting a character matrix to a Matrix.
+#'@param fill.x,fill.y the value to put in merged columns where there is no match.
+#'  Defaults to 0/FALSE for sparse matrices in order to preserve sparsity, NA for
+#'  all other classes
 #'@param ... arguments to be passed to or from methods.  Currently ignored
 #'@export
 #'@export merge.Matrix
 #'@examples
 #' 
 #' orders<-Matrix(as.matrix(data.frame(orderNum=1:1000, 
-#' customer=sample(100,1000,TRUE)))) 
-#' cancelledOrders<-Matrix(as.matrix(data.frame(orderNum=sample(1000,100), 
-#' cancelled=1))) 
+#'  customer=sample(100,1000,TRUE)))) 
+#'  cancelledOrders<-Matrix(as.matrix(data.frame(orderNum=sample(1000,100), 
+#'  cancelled=1))) 
 #' skus<-Matrix(as.matrix(data.frame(orderNum=sample(1000,10000,TRUE), 
 #' sku=sample(1000,10000,TRUE), amount=runif(10000)))) 
 #' a<-merge(orders,cancelledOrders,orders[,'orderNum'],cancelledOrders[,'orderNum'])
@@ -311,17 +344,21 @@ aggregate.Matrix<-function(x,groupings=NULL,form=NULL,fun='sum',...)
 #'  d<-merge(data.table(data.frame(key=one)),data.table(data.frame(key=two)),
 #'  by='key',all=TRUE,allow.cartesian=TRUE)})
 #'}
-merge.Matrix<-function(x,y,by.x,by.y,all.x=TRUE,all.y=TRUE,...)
+#'
+merge.Matrix<-function(x,y,by.x,by.y,all.x=TRUE,all.y=TRUE,out.class=class(x),
+                       fill.x=ifelse(is(x,'sparseMatrix'),FALSE,NA),fill.y=fill.x,...)
 {
   requireNamespace('grr')
   if(is.null(dim(x)))
     return(grr::matches(by.x,by.y,all.x,all.y,indexes=FALSE))
   indices<-grr::matches(by.x,by.y,all.x,all.y,nomatch = NULL)
-  x<-rBind(x,NA)
-  y<-rBind(y,NA)
+  x<-rBind(x,fill.x)
+  y<-rBind(y,fill.y)
   if(!is.null(colnames(x)) & !is.null(colnames(y)))
     colnames(y)[colnames(y) %in% colnames(x)]<-paste('y',colnames(y)[colnames(y) %in% colnames(x)],sep='.')
-  result<-cbind2(grr::extract(x,indices$x),grr::extract(y,indices$y))
+  x<-as(grr::extract(x,indices$x),out.class)
+  y<-as(grr::extract(y,indices$y),out.class)
+  result<-cbind2(x,y)
   return(result)
 }
 
@@ -430,6 +467,11 @@ len<-function (data)
 
 setAs('Matrix','data.frame',function (from) as.data.frame(as.matrix(from)))
 
+setAs('data.frame','dgeMatrix', function (from) as(as.matrix(from),'dgeMatrix'))
+
+setAs('data.frame','dgCMatrix', function (from) as(as.matrix(from),'dgCMatrix'))
+
 setAs('matrix','data.frame',function (from) as.data.frame(from))
 
 setAs('vector','data.frame',function (from) data.frame(from))
+
