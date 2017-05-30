@@ -385,6 +385,9 @@ join.Matrix<-merge.Matrix
 #' @param x,... Objects to combine.  If the first argument is a list and 
 #'   \code{..} is unpopulated, the objects in that list will be combined.
 #' @param fill value with which to fill unmatched columns
+#' @param out.class the class of the output object.  Defaults to the class of x. 
+#'  Note that some output classes are not possible due to R coercion
+#'  capabilities, such as converting a character matrix to a Matrix.
 #' @return a single object of the same class as the first input, or of class
 #'   \code{matrix} if the first object is one dimensional
 #' @seealso \code{\link[plyr]{rbind.fill}}
@@ -407,34 +410,30 @@ join.Matrix<-merge.Matrix
 #' colnames(m2)<-3:102
 #' system.time(b<-rBind.fill(m,m2))
 #' 
-rBind.fill<-function(x,...,fill=NA)
+rBind.fill<-function(x,...,fill=NULL,out.class=class(x))
 {
   if (is.list(x) && !is.data.frame(x) && missing(...)) {
-    Reduce(function (x,y) rBind.fill.internal(x,y,fill),x)
+    Reduce(function (x,y) rBind.fill.internal(x,y,fill,out.class),x)
   }
   else {
-    Reduce(function (x,y) rBind.fill.internal(x,y,fill),list(x,...))
+    Reduce(function (x,y) rBind.fill.internal(x,y,fill,out.class),list(x,...))
   }
 }
 
-rBind.fill.internal<-function(x,y,fill=NA)
+rBind.fill.internal<-function(x,y,fill,out.class)
 {
+  browser()
+  out.class<-force(out.class)
+  fillMissing<-is.null(fill)
+  if(fillMissing)
+    fill<-if(is(x,'Matrix')) 0 else NA
   if (is.null(nrow(x)))
        x<-matrix(x,nrow=1,dimnames=list(NULL,names(x)))
   if (is.null(nrow(y)))
       y<-matrix(y,nrow=1,dimnames=list(NULL,names(y)))
-  y<-
-  {
-    if('data.frame' %in% is(x) && ('Matrix' %in% is(y)))
-      as.data.frame(y)
-    else
-    if('Matrix' %in% is(x))
-      as(y,'Matrix')
-    else
-      y
-  }
-
+  
   nullNames<-FALSE
+  #Cannot currently handle duplicate column names
   if(is.null(colnames(x)))
     colnames(x)<-colnames(y)[1:ncol(x)]
   if(is.null(colnames(y)))
@@ -446,13 +445,19 @@ rBind.fill.internal<-function(x,y,fill=NA)
     colnames(y)<-1:ncol(y)
   }
   ymiss<-colnames(x)[which(is.na(match(colnames(x),colnames(y))))]
-  ybind<-matrix(fill,nrow=nrow(y),ncol=length(ymiss))
+  ybind<-rsparsematrix(nrow=nrow(y),ncol=length(ymiss),0)
   colnames(ybind)<-ymiss
+  if(!fillMissing)
+    ybind[seq_along(ybind)]<-fill
   xmiss<-colnames(y)[which(is.na(match(colnames(y),colnames(x))))]
-  xbind<-matrix(fill,nrow=nrow(x),ncol=length(xmiss))
+  xbind<-rsparsematrix(nrow=nrow(x),ncol=length(xmiss),0)
   colnames(xbind)<-xmiss
+  if(!fillMissing)
+    xbind[seq_along(xbind)]<-fill
   x<-cbind2(x,xbind)
   y<-cbind2(y,ybind)
+  y<-as(y,out.class)
+  x<-as(x,out.class)
   result<-rbind2(x,y[,order(match(colnames(y),colnames(x)))])
   if(nullNames)
     colnames(result)<-NULL
@@ -465,6 +470,8 @@ len<-function (data)
   return(result)
 }
 
+setAs('Matrix','data.frame',function (from) as.data.frame(as.matrix(from)),)
+
 setAs('Matrix','data.frame',function (from) as.data.frame(as.matrix(from)))
 
 setAs('data.frame','dgeMatrix', function (from) as(as.matrix(from),'dgeMatrix'))
@@ -475,3 +482,16 @@ setAs('matrix','data.frame',function (from) as.data.frame(from))
 
 setAs('vector','data.frame',function (from) data.frame(from))
 
+setMethod("cbind2",c('data.frame','Matrix'),function (x,y) 
+{
+  y<-as.matrix(y)
+  cbind2(x,y)
+}
+)
+
+setMethod("cbind2",c('Matrix','data.frame'),function (x,y) 
+{
+  y<-as.matrix(y)
+  cbind2(x,y)
+}
+)
