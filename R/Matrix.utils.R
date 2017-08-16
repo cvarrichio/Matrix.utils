@@ -353,10 +353,12 @@ merge.Matrix<-function(x,y,by.x,by.y,all.x=TRUE,all.y=TRUE,out.class=class(x),
     return(grr::matches(by.x,by.y,all.x,all.y,indexes=FALSE))
   indices<-grr::matches(by.x,by.y,all.x,all.y,nomatch = NULL)
   x<-rBind(x,fill.x)
+  x<-as(grr::extract(x,indices$x),out.class)
+  
   y<-rBind(y,fill.y)
   if(!is.null(colnames(x)) & !is.null(colnames(y)))
     colnames(y)[colnames(y) %in% colnames(x)]<-paste('y',colnames(y)[colnames(y) %in% colnames(x)],sep='.')
-  x<-as(grr::extract(x,indices$x),out.class)
+
   y<-as(grr::extract(y,indices$y),out.class)
   result<-cbind2(x,y)
   return(result)
@@ -410,7 +412,7 @@ join.Matrix<-merge.Matrix
 #' colnames(m2)<-3:102
 #' system.time(b<-rBind.fill(m,m2))
 #' 
-rBind.fill<-function(x,...,fill=NULL,out.class=class(x))
+rBind.fill<-function(x,...,fill=NULL,out.class=class(rbind(x,x)))
 {
   if (is.list(x) && !is.data.frame(x) && missing(...)) {
     Reduce(function (x,y) rBind.fill.internal(x,y,fill,out.class),x)
@@ -422,7 +424,6 @@ rBind.fill<-function(x,...,fill=NULL,out.class=class(x))
 
 rBind.fill.internal<-function(x,y,fill,out.class)
 {
-  browser()
   out.class<-force(out.class)
   fillMissing<-is.null(fill)
   if(fillMissing)
@@ -454,8 +455,10 @@ rBind.fill.internal<-function(x,y,fill,out.class)
   colnames(xbind)<-xmiss
   if(!fillMissing)
     xbind[seq_along(xbind)]<-fill
-  x<-cbind2(x,xbind)
-  y<-cbind2(y,ybind)
+  if (ncol(xbind>0))
+    x<-cbind2(x,xbind)
+  if(ncol(ybind)>0)
+    y<-cbind2(y,ybind)
   y<-as(y,out.class)
   x<-as(x,out.class)
   result<-rbind2(x,y[,order(match(colnames(y),colnames(x)))])
