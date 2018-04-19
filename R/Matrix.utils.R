@@ -352,10 +352,10 @@ merge.Matrix<-function(x,y,by.x,by.y,all.x=TRUE,all.y=TRUE,out.class=class(x),
   if(is.null(dim(x)))
     return(grr::matches(by.x,by.y,all.x,all.y,indexes=FALSE))
   indices<-grr::matches(by.x,by.y,all.x,all.y,nomatch = NULL)
-  x<-rBind(x,fill.x)
+  x<-rbind(x,fill.x)
   x<-as(grr::extract(x,indices$x),out.class)
   
-  y<-rBind(y,fill.y)
+  y<-rbind(y,fill.y)
   if(!is.null(colnames(x)) & !is.null(colnames(y)))
     colnames(y)[colnames(y) %in% colnames(x)]<-paste('y',colnames(y)[colnames(y) %in% colnames(x)],sep='.')
 
@@ -436,9 +436,9 @@ rBind.fill.internal<-function(x,y,fill,out.class)
   nullNames<-FALSE
   #Cannot currently handle duplicate column names
   if(is.null(colnames(x)))
-    colnames(x)<-colnames(y)[1:ncol(x)]
+    colnames(x)<-make.names(colnames(y)[1:ncol(x)],unique = TRUE)
   if(is.null(colnames(y)))
-     colnames(y)<-colnames(x)[1:ncol(y)]
+     colnames(y)<-make.names(colnames(x)[1:ncol(y)],unique = TRUE)
   if(is.null(colnames(x)))
   {
     nullNames<-TRUE

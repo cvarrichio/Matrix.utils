@@ -1,6 +1,6 @@
 Package: Matrix.utils
 Title: Data.frame-Like Operations on Sparse and Dense Matrix Objects
-Version: 0.9.6
+Version: 0.9.7
 Author: Craig Varrichio <canthony427@gmail.com>
 Maintainer: Craig Varrichio <canthony427@gmail.com>
 Description: Implements data manipulation methods such as cast, aggregate, and merge/join for Matrix and matrix-like objects.

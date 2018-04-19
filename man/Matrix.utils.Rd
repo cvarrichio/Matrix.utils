@@ -4,9 +4,8 @@
 \name{Matrix.utils}
 \alias{Matrix.utils}
 \alias{Matrix.utils-package}
-\title{Data.frame-like operations on sparse and dense \code{Matrix} objects,}
+\title{Data.frame-Like Operations on Sparse and Dense \code{Matrix} Objects}
 \description{
-Implements cast, aggregate, and join for \code{\link{Matrix}} and matrix-like
-objects.
+Implements data manipulation methods such as cast, aggregate, and merge/join
+for \code{\link{Matrix}} and matrix-like objects.
 }
-
